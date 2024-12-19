@@ -43,6 +43,7 @@ func (repo *TransactionRepository) GetAccountTransactions(accountID string, from
 
 	var dateKeys []time.Time
 
+	// TODO normalize dateIndex to days
 	for key, _ := range repo.transactionsDateIndex {
 		dateKeys = append(dateKeys, key)
 	}
