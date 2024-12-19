@@ -47,8 +47,8 @@ func TestService_Transfer(t *testing.T) {
 			fields: fields{
 				accountService: func() accountService {
 					accServiceMock := mocks.NewAccountService(t)
-					accServiceMock.On("Get", fromAccount.ID).Return(fromAccount, nil)
-					accServiceMock.On("Get", toAccount.ID).Return(toAccount, nil)
+					accServiceMock.On("AddBalance", fromAccount.ID, -100).Return(fromAccount, nil)
+					accServiceMock.On("AddBalance", toAccount.ID, 100).Return(toAccount, nil)
 					return accServiceMock
 				},
 			},
@@ -58,9 +58,10 @@ func TestService_Transfer(t *testing.T) {
 				amount:        100,
 			},
 			want: &domain.Transaction{
-				FromAccountID: fromAccount.ID,
-				ToAccountID:   toAccount.ID,
+				FromAccountID: &fromAccount.ID,
+				ToAccountID:   &toAccount.ID,
 				Amount:        100,
+				Type:          domain.Transfer,
 			},
 		},
 		{
@@ -68,7 +69,7 @@ func TestService_Transfer(t *testing.T) {
 			fields: fields{
 				accountService: func() accountService {
 					accServiceMock := mocks.NewAccountService(t)
-					accServiceMock.On("Get", fromAccount.ID).Return(fromAccount, nil)
+					accServiceMock.On("AddBalance", fromAccount.ID, -1000).Return(nil, errors.New("not enough balance"))
 					return accServiceMock
 				},
 			},
@@ -82,10 +83,8 @@ func TestService_Transfer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := Service{
-				accountService:        tt.fields.accountService(),
-				transactionRepository: transactionRepository,
-			}
+			service := NewService(tt.fields.accountService(), transactionRepository)
+
 			got, err := service.Transfer(tt.args.fromAccountID, tt.args.toAccountID, tt.args.amount)
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("Transfer() error = %v, wantErr %v", err, tt.wantErr)
@@ -105,38 +104,38 @@ func TestService_GetAccountTransactionHistory(t *testing.T) {
 	fourDaysAgo := now.Add(-24 * time.Hour * 4)
 	fiveDaysAgo := now.Add(-24 * time.Hour * 5)
 
+	accountID1 := "1"
+	accountID2 := "2"
+
 	t1, _ := transactionRepository.Insert(&domain.Transaction{
 		ID:            shortuuid.New(),
-		FromAccountID: "1",
-		ToAccountID:   "2",
+		FromAccountID: &accountID1,
+		ToAccountID:   &accountID2,
 		Amount:        100,
 		CreatedAt:     now,
 	})
 	t2, _ := transactionRepository.Insert(&domain.Transaction{
 		ID:            shortuuid.New(),
-		FromAccountID: "2",
-		ToAccountID:   "1",
+		FromAccountID: &accountID2,
+		ToAccountID:   &accountID1,
 		Amount:        100,
 		CreatedAt:     now.AddDate(0, 0, -1),
 	})
 	t3, _ := transactionRepository.Insert(&domain.Transaction{
 		ID:            shortuuid.New(),
-		FromAccountID: "1",
-		ToAccountID:   "2",
+		FromAccountID: &accountID1,
+		ToAccountID:   &accountID2,
 		Amount:        100,
 		CreatedAt:     now.AddDate(0, 0, -2),
 	})
 	t4, _ := transactionRepository.Insert(&domain.Transaction{
 		ID:            shortuuid.New(),
-		FromAccountID: "2",
-		ToAccountID:   "1",
+		FromAccountID: &accountID2,
+		ToAccountID:   &accountID1,
 		Amount:        100,
 		CreatedAt:     now.AddDate(0, 0, -3),
 	})
 
-	type fields struct {
-		accountService func() accountService
-	}
 	type args struct {
 		accountID string
 		fromDate  time.Time
@@ -146,20 +145,12 @@ func TestService_GetAccountTransactionHistory(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		fields  fields
 		args    args
 		want    []domain.Transaction
 		wantErr error
 	}{
 		{
 			name: "transaction history with today's transactions",
-			fields: fields{
-				accountService: func() accountService {
-					accServiceMock := mocks.NewAccountService(t)
-					accServiceMock.On("Get", "1").Return(&domain.Account{ID: "1"}, nil)
-					return accServiceMock
-				},
-			},
 			args: args{
 				accountID: "1",
 				fromDate:  time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC),
@@ -173,13 +164,6 @@ func TestService_GetAccountTransactionHistory(t *testing.T) {
 		},
 		{
 			name: "transaction history with last 4 days' transactions",
-			fields: fields{
-				accountService: func() accountService {
-					accServiceMock := mocks.NewAccountService(t)
-					accServiceMock.On("Get", "1").Return(&domain.Account{ID: "1"}, nil)
-					return accServiceMock
-				},
-			},
 			args: args{
 				accountID: "1",
 				fromDate:  time.Date(fourDaysAgo.Year(), fourDaysAgo.Month(), fourDaysAgo.Day(), 0, 0, 0, 0, time.UTC),
@@ -191,13 +175,6 @@ func TestService_GetAccountTransactionHistory(t *testing.T) {
 		},
 		{
 			name: "transaction history from 5 days ago to 4 days ago, empty list",
-			fields: fields{
-				accountService: func() accountService {
-					accServiceMock := mocks.NewAccountService(t)
-					accServiceMock.On("Get", "1").Return(&domain.Account{ID: "1"}, nil)
-					return accServiceMock
-				},
-			},
 			args: args{
 				accountID: "1",
 				fromDate:  time.Date(fiveDaysAgo.Year(), fiveDaysAgo.Month(), fiveDaysAgo.Day(), 0, 0, 0, 0, time.UTC),
@@ -208,10 +185,8 @@ func TestService_GetAccountTransactionHistory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := Service{
-				accountService:        tt.fields.accountService(),
-				transactionRepository: transactionRepository,
-			}
+			service := NewService(nil, transactionRepository)
+
 			got, err := service.GetAccountTransactionHistory(tt.args.accountID, tt.args.fromDate, tt.args.toDate)
 			if !errors.Is(err, tt.wantErr) {
 				t.Errorf("GetAccountTransactionHistory() error = %v, wantErr %v", err, tt.wantErr)

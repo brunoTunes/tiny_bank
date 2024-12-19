@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"http/internal/domain"
@@ -10,6 +11,7 @@ import (
 //go:generate go run github.com/vektra/mockery/v2 --name=accountService --structname=AccountService --output=mocks/
 type accountService interface {
 	Get(accountID string) (*domain.Account, error)
+	AddBalance(accountID string, balance int) (*domain.Account, error)
 }
 
 type transactionRepository interface {
@@ -20,37 +22,51 @@ type transactionRepository interface {
 type Service struct {
 	accountService        accountService
 	transactionRepository transactionRepository
+
+	// TODO isolate this in it's own package
+	mapAccessMutex sync.Mutex
+	mutexMap       map[string]*sync.Mutex
 }
 
 func NewService(accountService accountService, transactionRepository transactionRepository) *Service {
 	return &Service{
 		accountService:        accountService,
 		transactionRepository: transactionRepository,
+		mapAccessMutex:        sync.Mutex{},
+		mutexMap:              make(map[string]*sync.Mutex),
 	}
 }
 
-func (service Service) Transfer(fromAccountID, toAccountID string, amount int) (*domain.Transaction, error) {
-	transaction, err := domain.NewTransaction(fromAccountID, toAccountID, amount)
+func (service *Service) Transfer(fromAccountID, toAccountID string, amount int) (*domain.Transaction, error) {
+	service.mapAccessMutex.Lock()
+
+	if service.mutexMap[fromAccountID] == nil {
+		service.mutexMap[fromAccountID] = &sync.Mutex{}
+	}
+	service.mutexMap[fromAccountID].Lock()
+	defer service.mutexMap[fromAccountID].Unlock()
+
+	if service.mutexMap[toAccountID] == nil {
+		service.mutexMap[toAccountID] = &sync.Mutex{}
+	}
+	service.mutexMap[toAccountID].Lock()
+	defer service.mutexMap[toAccountID].Unlock()
+
+	service.mapAccessMutex.Unlock()
+
+	fromAccount, err := service.accountService.AddBalance(fromAccountID, -amount)
+	if err != nil {
+		return nil, errors.Join(failedAddBalance, err)
+	}
+
+	toAccount, err := service.accountService.AddBalance(toAccountID, amount)
+	if err != nil {
+		return nil, errors.Join(failedAddBalance, err)
+	}
+
+	transaction, err := domain.NewTransfer(fromAccount.ID, toAccount.ID, amount)
 	if err != nil {
 		return nil, errors.Join(failedToCreateTransaction, err)
-	}
-
-	fromAccount, err := service.accountService.Get(transaction.FromAccountID)
-	if err != nil {
-		return nil, errors.Join(failedToGetAccount, err)
-	}
-
-	if err := fromAccount.AddBalance(-amount); err != nil {
-		return nil, errors.Join(failedAddBalance, err)
-	}
-
-	toAccount, err := service.accountService.Get(transaction.ToAccountID)
-	if err != nil {
-		return nil, errors.Join(failedToGetAccount, err)
-	}
-
-	if err := toAccount.AddBalance(amount); err != nil {
-		return nil, errors.Join(failedAddBalance, err)
 	}
 
 	newTransaction, err := service.transactionRepository.Insert(transaction)
@@ -61,17 +77,70 @@ func (service Service) Transfer(fromAccountID, toAccountID string, amount int) (
 	return newTransaction, nil
 }
 
-func (service Service) GetAccountTransactionHistory(accountID string, fromDate time.Time, toDate time.Time) ([]domain.Transaction, error) {
+func (service *Service) Deposit(toAccountID string, amount int) (*domain.Transaction, error) {
+	service.mapAccessMutex.Lock()
+
+	if service.mutexMap[toAccountID] == nil {
+		service.mutexMap[toAccountID] = &sync.Mutex{}
+	}
+	service.mutexMap[toAccountID].Lock()
+	defer service.mutexMap[toAccountID].Unlock()
+
+	service.mapAccessMutex.Unlock()
+
+	toAccount, err := service.accountService.AddBalance(toAccountID, amount)
+	if err != nil {
+		return nil, errors.Join(failedAddBalance, err)
+	}
+
+	transaction, err := domain.NewDeposit(toAccount.ID, amount)
+	if err != nil {
+		return nil, errors.Join(failedToCreateTransaction, err)
+	}
+
+	newTransaction, err := service.transactionRepository.Insert(transaction)
+	if err != nil {
+		return nil, errors.Join(failedToInsertTransaction, err)
+	}
+
+	return newTransaction, nil
+}
+
+func (service *Service) Withdraw(fromAccountID string, amount int) (*domain.Transaction, error) {
+	service.mapAccessMutex.Lock()
+
+	if service.mutexMap[fromAccountID] == nil {
+		service.mutexMap[fromAccountID] = &sync.Mutex{}
+	}
+	service.mutexMap[fromAccountID].Lock()
+	defer service.mutexMap[fromAccountID].Unlock()
+
+	service.mapAccessMutex.Unlock()
+
+	fromAccount, err := service.accountService.AddBalance(fromAccountID, -amount)
+	if err != nil {
+		return nil, errors.Join(failedAddBalance, err)
+	}
+
+	transaction, err := domain.NewWithdrawal(fromAccount.ID, amount)
+	if err != nil {
+		return nil, errors.Join(failedToCreateTransaction, err)
+	}
+
+	newTransaction, err := service.transactionRepository.Insert(transaction)
+	if err != nil {
+		return nil, errors.Join(failedToInsertTransaction, err)
+	}
+
+	return newTransaction, nil
+}
+
+func (service *Service) GetAccountTransactionHistory(accountID string, fromDate time.Time, toDate time.Time) ([]domain.Transaction, error) {
 	if accountID == "" {
 		return nil, errors.New("invalid empty account ID")
 	}
 
-	acc, err := service.accountService.Get(accountID)
-	if err != nil {
-		return nil, err
-	}
-
-	transactions, err := service.transactionRepository.GetAccountTransactions(acc.ID, fromDate, toDate)
+	transactions, err := service.transactionRepository.GetAccountTransactions(accountID, fromDate, toDate)
 	if err != nil {
 		return nil, err
 	}

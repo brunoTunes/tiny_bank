@@ -20,7 +20,7 @@ func NewServer(
 ) http.Handler {
 	mux := http.NewServeMux()
 	handlers.RegisterUserHandler(mux, logger, userService)
-	handlers.RegisterAccountHandler(mux, logger, accountService, transactionService)
+	handlers.RegisterAccountHandler(mux, logger, accountService)
 	handlers.RegisterTransactionHandler(mux, logger, transactionService)
 	return mux
 }

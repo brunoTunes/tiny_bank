@@ -13,6 +13,36 @@ type AccountService struct {
 	mock.Mock
 }
 
+// AddBalance provides a mock function with given fields: accountID, balance
+func (_m *AccountService) AddBalance(accountID string, balance int) (*domain.Account, error) {
+	ret := _m.Called(accountID, balance)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddBalance")
+	}
+
+	var r0 *domain.Account
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, int) (*domain.Account, error)); ok {
+		return rf(accountID, balance)
+	}
+	if rf, ok := ret.Get(0).(func(string, int) *domain.Account); ok {
+		r0 = rf(accountID, balance)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Account)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, int) error); ok {
+		r1 = rf(accountID, balance)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Get provides a mock function with given fields: accountID
 func (_m *AccountService) Get(accountID string) (*domain.Account, error) {
 	ret := _m.Called(accountID)

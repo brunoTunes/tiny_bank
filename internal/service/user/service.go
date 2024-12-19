@@ -73,17 +73,3 @@ func (service Service) DeleteUser(userID string) error {
 func (service Service) GetUsers(returnDeleted bool) ([]domain.User, error) {
 	return service.userRepository.GetAll(returnDeleted)
 }
-
-func (service Service) GetAccounts(userID string) ([]domain.Account, error) {
-	u, err := service.userRepository.Get(userID)
-	if err != nil {
-		return nil, errors.Join(failedToGetUser, err)
-	}
-
-	accs, err := service.accountService.GetUserAccounts(u.ID)
-	if err != nil {
-		return nil, errors.Join(failedToGetUserAccounts, err)
-	}
-
-	return accs, nil
-}

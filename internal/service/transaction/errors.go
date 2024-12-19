@@ -1,6 +1,8 @@
 package transaction
 
-import "errors"
+import (
+	"errors"
+)
 
 var failedToCreateTransaction = errors.New("failed to create transaction")
 var failedToGetAccount error = errors.New("failed to get account")

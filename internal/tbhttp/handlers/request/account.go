@@ -1,5 +1,5 @@
 package request
 
 type AccountBalance struct {
-	Balance int
+	Balance int `json:"balance"`
 }

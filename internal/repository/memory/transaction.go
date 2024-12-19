@@ -61,7 +61,8 @@ func (repo *TransactionRepository) GetAccountTransactions(accountID string, from
 		}
 
 		for _, transactionID := range repo.transactionsDateIndex[date] {
-			if repo.transactions[transactionID].ToAccountID == accountID || repo.transactions[transactionID].FromAccountID == accountID {
+			if (repo.transactions[transactionID].ToAccountID != nil && *repo.transactions[transactionID].ToAccountID == accountID) ||
+				(repo.transactions[transactionID].FromAccountID != nil && *repo.transactions[transactionID].FromAccountID == accountID) {
 				transactions = append(transactions, *repo.transactions[transactionID])
 			}
 		}
