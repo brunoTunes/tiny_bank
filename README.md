@@ -59,7 +59,7 @@ curl --request POST \
 ```
 
 > [!IMPORTANT]  
-> in subsequent requests {u1_id}, {u2_account_id}, {u1_account_id} most be matched against generated ids which are returns in previous requests
+> in subsequent requests {u1_id}, {u2_account_id}, {u1_account_id} most be matched against generated ids which are returned in previous requests
 ```
 Fetch u1 accounts, alongisde their balance
 
