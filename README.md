@@ -1,6 +1,6 @@
 
 > [!NOTE]  
-> Please disregard the one and only commit, this is far from ideal, and it's now how it should be done. 
+> Please disregard the low commits, this is far from ideal, and it's now how it should be done. 
 
 # Tiny bank
 
