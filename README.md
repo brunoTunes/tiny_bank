@@ -58,7 +58,7 @@ curl --request POST \
   --data '{"name": "u2"}'
 ```
 
-> [!WARN]  
+> [!IMPORTANT]  
 > in subsequent requests {u1_id}, {u2_account_id}, {u1_account_id} most be matched against generated ids which are returns in previous requests
 ```
 Fetch u1 accounts, alongisde their balance
