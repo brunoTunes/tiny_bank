@@ -56,11 +56,11 @@ curl --request POST \
   --url http://localhost:8080/users \
   --header 'content-type: application/json' \
   --data '{"name": "u2"}'
-
+```
 
 > [!WARN]  
 > in subsequent requests {u1_id}, {u2_account_id}, {u1_account_id} most be matched against generated ids which are returns in previous requests
-
+```
 Fetch u1 accounts, alongisde their balance
 
 curl --request GET \
